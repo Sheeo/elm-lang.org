@@ -1,4 +1,4 @@
-module Search (box, results) where
+module Website.Search (box, results) where
 
 import Char
 import Http

@@ -1,58 +1,90 @@
+module Website.Docs where
 
-module Website.Docs (createDocs) where
-
-import open Website.ColorScheme
 import Window
-import Char
 
-accents = [accent0,accent1,accent2,accent3,accent4]
+accent0 = rgb 90 99 120
 
-topBar k n =
-    let n' = toFloat n
-        k' = toFloat k
-        segs = map (\i -> round (n' * toFloat i / k')) [1..k]
-        ws = zipWith (-) segs (0::segs)
-        accentCycle = concatMap (\_ -> accents) [ 0 .. k `div` 5 ]
-    in  flow right <| zipWith (\c w -> color c <| spacer w 5) accentCycle ws
+accent1 = rgb 96 181 204
+accent2 = rgb 240 173 0
+accent3 = rgb 234 21 122
+accent4 = rgb 127 209 59
 
-skeleton body outer =
-  let content = body (outer - 80) in
-  flow down [ topBar 10 outer 
-            , spacer outer 15
-            , container outer (heightOf content) midTop content
-            , container outer 50 midBottom . text <|
-                Text.color (rgb 145 145 145) (toText "&copy; 2011-2013 ") ++
-                    Text.link "https://github.com/evancz" (toText "Evan Czaplicki")
-            ]
+lightGrey  = rgb 245 245 245
+mediumGrey = rgb 216 221 225
+darkGrey   = rgb 164 166 169
 
-addSpaces px = intersperse (spacer 1 px)
+documentation name es (w,h) search results =
+    let title wid = container wid 100 middle . text . Text.height 60 <| toText name
+        stuff = flow down (map (\e -> e (w-300)) (title :: es))
+        maxH = max h (heightOf stuff)
+    in  
+      flow right [ sideBar maxH search results
+                 , color mediumGrey <| spacer 1 maxH
+                 , spacer 19 maxH
+                 , stuff
+                 , spacer 20 maxH ]
 
-section s = bold . Text.height s . toText
+border e = color mediumGrey <| container (widthOf e + 2) (heightOf e + 2) middle e
+linkName w str =
+    let address = "/" ++ map (\c -> if c == '.' then '/' else c) str ++ ".elm"
+    in  link address . width w . text . Text.color black <| toText str
+sideBar h search results =
+    color lightGrey . height h <|
+    flow down [ link "/" <| fittedImage 260 100 "/tangram-logo.png"
+              , container 260 50 middle . border <| width 200 search
+              , spacer 260 20
+              , flow right [ spacer 40 10
+                           , flow down (intersperse (spacer 180 4) <|
+                                 map (linkName 180) results)
+                           ]
+              ]
 
-entry f w (name, typ, desc) =
-  let colons = Text.color accent1 <| toText " : "
-      tipe = if Char.isUpper (head name)
-             then bold (toText typ)
-             else bold (toText name) ++ colons ++ toText typ
-  in
-  flow down
-    [ color mediumGrey <| spacer w 1
-    , tag name <| width w . color lightGrey . text . monospace <| tipe
-    , flow right [ spacer 50 10, f (w-50) desc ]
-    ]
+entry : String -> String -> Maybe (String,Int) -> Element -> Int -> Element
+entry name tipe assocPrec prose w =
+    let box n pos txt = container w (heightOf txt + n) pos txt
+        ap = case assocPrec of
+               Nothing -> []
+               Just (a,p) -> [ box 0 midRight . text . Text.color mediumGrey . monospace . toText <|
+                                   a ++ "-associative, precedence " ++ show p ]
+    in
+      flow down [ tag name . color lightGrey <| spacer w 1
+                , spacer w 8
+                , layers <| ap ++ [ box 0 midLeft . text <| prettify tipe ]
+                , width w prose
+                , spacer w 16
+                ]
 
-f1 w c = flow down [ spacer 1 10, width w <| plainText c, spacer 1 20 ]
-f2 w c = let c' = width w c
-             pos = topLeftAt (absolute 0) (absolute (0-5))
-         in  container w (heightOf c') pos c'
+until c xs =
+  case xs of
+    [] -> ([],[])
+    hd::tl ->
+        if | hd == '(' -> let (chomped,rest) = until ')' tl
+                              (before,after) = until c rest
+                          in  (hd :: chomped ++ before, after)
+           | hd == c -> ([], xs)
+           | otherwise -> let (before,after) = until c tl
+                          in  (hd::before, after)
 
-group f w (name, fs) =
-  flow down <| text (section 20 name) :: spacer 1 20 :: map (entry f w) fs
+prettify raw =
+    let firstFive = take 5 raw in
+    if | firstFive == "type " || firstFive == "data " ->
+           let (name, rest) = until ' ' (drop 5 raw) in
+           monospace <| concat [ Text.color accent1 <| toText firstFive
+                               , bold <| toText name
+                               , colorize [] rest
+                               ]
+       | otherwise ->
+           let (name, rest) = until ':' raw
+           in  monospace <| bold (toText name) ++ colorize [] rest
 
-createDocs name overview cats =
-  let f w = flow down <| [ text <| Text.link "/Documentation.elm" (toText "Back")
-                         , width w . centered <| section 40 name
-                         , width w overview
-                         , spacer 1 30
-                         ] ++ (addSpaces 50 <| map (group f2 w) cats)
-  in  lift (skeleton f) Window.width
+colorize stuff str =
+  let continue clr op rest =
+          toText (reverse stuff) ++ Text.color clr (toText op) ++ colorize [] rest
+  in 
+  case str of
+    ':' :: rest -> continue accent1 ":" rest
+    '-' :: '>' :: rest -> continue accent1 "->" rest
+    '|' :: rest -> continue accent1 "|" rest
+    '=' :: rest -> continue accent1 "=" rest
+    c :: rest -> colorize (c::stuff) rest
+    [] -> toText (reverse stuff)
