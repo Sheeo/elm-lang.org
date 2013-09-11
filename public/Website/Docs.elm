@@ -16,8 +16,8 @@ documentation name es (w,h) search results =
 
 border e = color mediumGrey <| container (widthOf e + 2) (heightOf e + 2) middle e
 linkName w str =
-    let address = "/" ++ map (\c -> if c == '.' then '/' else c) str ++ ".elm"
-    in  link address . width w . text . Text.color black <| toText str
+    let address = "/docs/" ++ map (\c -> if c == '.' then '/' else c) str ++ ".elm"
+    in  link address . text . Text.color black <| toText str
 sideBar h search results =
     color lightGrey . height h <|
     flow down [ link "/" <| fittedImage 260 100 "/tangram-logo.png"
