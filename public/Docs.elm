@@ -1,7 +1,7 @@
-module Website.Docs where
+module Docs where
 
 import Window
-import open Website.ColorScheme
+import open ColorScheme
 
 documentation name es (w,h) search results =
     let title wid = container wid 100 middle . text . Text.height 60 <| toText name
