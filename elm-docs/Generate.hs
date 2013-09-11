@@ -9,21 +9,20 @@ import qualified Data.ByteString.Lazy.Char8 as BS
 import Control.Applicative ((<$>),(<*>))
 import Control.Monad
 import Data.Aeson
+import System.Exit
 import System.FilePath
 import System.Directory
 import Text.Parsec
+import qualified Language.Elm as Elm
 
-test = either putStrLn putStrLn $ do
-  doc <- eitherDecode "{\"name\":\"List\", \"document\":\"# Test Documentation\nhello how are you? Welcome to the docs.\n\n* abc\n* def\n@docs a,(+)\n\nThat was the docs, thanks for listening!\",\"aliases\":[],\"values\":[{\"name\":\"a\",\"comment\":\"the letter A\",\"raw\":\"a : Char\"},{\"name\":\"+\",\"comment\":\"add numbers\",\"raw\":\"(+) : number -> number -> number\",\"associativity\":\"left\",\"precedence\":4}],\"datatypes\":[]}"
-  docToElm doc
-
-main = mapM document ["List","Either","Maybe","Mouse","Signal","Window","Graphics/Input","Basics"]
-
-document name = do
-  src <- BS.readFile $ "../../elm/libraries/docs/" ++ name ++ ".json"
-  case eitherDecode src of
-    Left err -> print err
-    Right doc -> either putStrLn (writeFile $ name ++ ".elm") (docToElm doc)
+main = do
+  json <- BS.readFile =<< Elm.docs
+  case eitherDecode json of
+    Left err -> print err >> exitFailure
+    Right docs ->
+        case Either.partitionEithers (map docToElm docs) of
+          ([], elms) -> mapM writeDocs elms
+          (errs, _) -> mapM putStrLn errs >> exitFailure
 
 writeDocs (name, code) =
   do putStrLn name
@@ -74,21 +73,24 @@ data Content = Markdown String | Value String
                deriving Show
 
 docToElm doc =
-  do contents <- either (Left . show) Right $ parse (parseDoc []) "" (structure doc)
-     let entries = getEntries doc
-     case Either.partitionEithers $ map (contentToElm entries) contents of
-       ([], code) -> Right $ unlines [ "import open Docs"
-                                     , "import Window"
-                                     , "import Search"
-                                     , ""
-                                     , "main = documentation " ++ show (moduleName doc) ++ " entries <~ Window.dimensions ~ Search.box ~ Search.results"
-
-
-                                     , ""
-                                     , "entries ="
-                                     , "  [ " ++ List.intercalate "\n  , " code ++ "\n  ]"
-                                     ]
-       (missing, _) -> Left $ "Could not find documentation for: " ++ List.intercalate ", " missing
+  let name = moduleName doc
+      entries = getEntries doc
+  in
+  do contents <- either (Left . show) Right $ parse (parseDoc []) name (structure doc)
+     case Either.partitionEithers $ map (contentToElm (getEntries doc)) contents of
+       ([], code) ->
+           Right . (,) name $
+           unlines [ "import open Docs"
+                   , "import Window"
+                   , "import Search"
+                   , ""
+                   , "main = documentation " ++ show name ++ " entries <~ Window.dimensions ~ Search.box ~ Search.results"
+                   , ""
+                   , "entries ="
+                   , "  [ " ++ List.intercalate "\n  , " code ++ "\n  ]"
+                   ]
+       (missing, _) ->
+           Left $ "In module " ++ name ++ ", could not find documentation for: " ++ List.intercalate ", " missing
   where
     parseDoc contents =
         choice [ eof >> return contents
