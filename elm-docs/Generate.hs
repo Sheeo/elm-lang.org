@@ -80,8 +80,8 @@ docToElm doc =
      case Either.partitionEithers $ map (contentToElm (getEntries doc)) contents of
        ([], code) ->
            Right . (,) name $
-           unlines [ "import open Website.Docs"
-                   , "import Website.Search as Search"
+           unlines [ "import open Docs"
+                   , "import Search"
                    , "import Window"
                    , ""
                    , "main = documentation " ++ show name ++ " entries <~ Window.dimensions ~ Search.box ~ Search.results"
