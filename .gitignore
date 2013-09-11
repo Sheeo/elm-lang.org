@@ -5,3 +5,4 @@ ElmServer
 cache
 build
 resources/elm-runtime.js
+resources/docs.json
